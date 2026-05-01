@@ -8,7 +8,9 @@ from pathlib import Path
 from gtts import gTTS
 from moviepy import AudioFileClip, ImageClip, CompositeVideoClip
 from PIL import Image, ImageDraw, ImageFont
-from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS, LANG, TLD, PEXELS_API_KEY, AUDIO_SPEED
+from urllib.parse import quote
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS, LANG, TLD, AUDIO_SPEED
 
 W, H = VIDEO_WIDTH, VIDEO_HEIGHT
 
@@ -33,30 +35,21 @@ def _load_font(paths, size):
     return ImageFont.load_default()
 
 
-def _fetch_pexels_images(query, num=6):
+def _fetch_pollinations_images(prompt, num=3):
+    PW, PH = 960, 540  # genera en 960x540, luego escala a 1280x720
+
+    def fetch_one(seed):
+        url = f"https://image.pollinations.ai/prompt/{quote(prompt)}?width={PW}&height={PH}&model=flux&nologo=true&seed={seed}"
+        resp = requests.get(url, timeout=90)
+        img = Image.open(BytesIO(resp.content)).convert("RGB").resize((W, H), Image.LANCZOS)
+        return np.array(img)
+
     try:
-        headers = {"Authorization": PEXELS_API_KEY}
-        params = {"query": query, "per_page": num + 2, "orientation": "landscape"}
-        resp = requests.get("https://api.pexels.com/v1/search", headers=headers, params=params, timeout=15)
-        photos = resp.json().get("photos", [])[:num]
-        if not photos:
-            return None
-        images = []
-        for photo in photos:
-            url = photo["src"].get("large2x") or photo["src"]["large"]
-            img_resp = requests.get(url, timeout=20)
-            img = Image.open(BytesIO(img_resp.content)).convert("RGB")
-            img_ratio = img.width / img.height
-            out_ratio = W / H
-            if img_ratio > out_ratio:
-                new_h, new_w = H, int(H * img_ratio)
-            else:
-                new_w, new_h = W, int(W / img_ratio)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-            x, y = (new_w - W) // 2, (new_h - H) // 2
-            img = img.crop((x, y, x + W, y + H))
-            images.append(np.array(img))
-        return images or None
+        seeds = [42, 137, 512][:num]
+        with ThreadPoolExecutor(max_workers=num) as ex:
+            futures = {ex.submit(fetch_one, s): s for s in seeds}
+            images = [f.result() for f in as_completed(futures)]
+        return images if images else None
     except Exception:
         return None
 
@@ -153,7 +146,8 @@ def make_video(mystery, output_dir: Path) -> Path:
     chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
     chunk_dur = duration / len(chunks)
 
-    images = _fetch_pexels_images(title, num=len(chunks))
+    img_prompt = mystery.get("img_prompt", title)
+    images = _fetch_pollinations_images(img_prompt, num=5)
 
     clips = []
     for i, chunk in enumerate(chunks):
