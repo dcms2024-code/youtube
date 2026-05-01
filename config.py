@@ -16,3 +16,9 @@ TLD = "es"
 CHANNEL_NAME = "Misterios de la Antigüedad"
 VIDEO_TAGS = ["misterios", "antigüedad", "historia", "arqueología", "misterios sin resolver", "arqueología antigua"]
 VIDEO_CATEGORY_ID = "27"  # Education
+
+PEXELS_API_KEY = "HnN5TCuAIsBsP0rr7ZFQT1xgKiS1t7UeyNKimtE4EO3OYrlaRodPL7fh"
+AUDIO_SPEED = 1.25
+
+TELEGRAM_TOKEN = "8352432640:AAGvqpzWiAaL-KiC1nrJH_zlmX-BMeeICPc"
+TELEGRAM_CHAT_ID = "618447835"
